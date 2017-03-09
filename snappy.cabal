@@ -3,9 +3,42 @@ version:             0.1.0.0
 build-type:          Simple
 cabal-version:       >=1.10
 
-executable snappy
+executable snappy-click
   hs-source-dirs:      app, src
-  main-is:             Main.hs
+  main-is:             Click.hs
+  other-modules: Snappy, Snap
+  ghc-options:         -Wall -O2 -threaded
+  build-depends:       base
+                     , ghcjs-base
+                     , aeson
+                     , text
+  default-language:    Haskell2010
+
+executable snappy-dragging
+  hs-source-dirs:      app, src
+  main-is:             Drag.hs
+  other-modules: Snappy, Snap
+  ghc-options:         -Wall -O2 -threaded
+  build-depends:       base
+                     , ghcjs-base
+                     , aeson
+                     , text
+  default-language:    Haskell2010
+
+executable snappy-text
+  hs-source-dirs:      app, src
+  main-is:             Text.hs
+  other-modules: Snappy, Snap
+  ghc-options:         -Wall -O2 -threaded
+  build-depends:       base
+                     , ghcjs-base
+                     , aeson
+                     , text
+  default-language:    Haskell2010
+
+executable snappy-select
+  hs-source-dirs:      app, src
+  main-is:             Select.hs
   other-modules: Snappy, Snap
   ghc-options:         -Wall -O2 -threaded
   build-depends:       base
