@@ -1,3 +1,3 @@
 # snappy
 
-Go here for a demonstration: http://chrisdone.com/toys/snappy-dragging/
+Go here for demonstrations: http://chrisdone.com/toys/
