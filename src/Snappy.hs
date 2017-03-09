@@ -11,6 +11,7 @@ module Snappy where
 import           Control.Concurrent
 import           Control.Monad
 import           Data.IORef
+import           Data.Maybe
 import qualified Snap
 import           System.IO.Unsafe
 
@@ -19,7 +20,7 @@ import           System.IO.Unsafe
 
 data Event a = forall origin s. Event
   { eventSubscribers :: IORef [origin -> IO ()]
-  , eventFromOrigin :: s -> origin -> (a,s)
+  , eventFromOrigin :: s -> origin -> (Maybe a,s)
   , eventState :: s
   }
 
@@ -29,7 +30,7 @@ instance Functor Event where
       subscribers
       (\s origin ->
          let (a', s') = fromOrigin s origin
-         in (f a', s'))
+         in (fmap f a', s'))
       state
   {-# INLINE fmap #-}
 
@@ -40,7 +41,7 @@ zipEvents f e1 e2 =
     (do subscribersRef <- newIORef mempty
         tvar1 <- newEmptyMVar
         tvar2 <- newEmptyMVar
-        let !ev = Event subscribersRef (\s (a, b) -> (f a b, s)) ()
+        let !ev = Event subscribersRef (\s (a, b) -> (Just (f a b), s)) ()
         let listen e us them pair =
               bindEvent
                 e
@@ -56,16 +57,34 @@ zipEvents f e1 e2 =
         pure ev)
 {-# NOINLINE zipEvents #-}
 
-foldEvent :: (s -> a -> s) -> s -> Event a -> Event s
-foldEvent f nil (Event subscribers fromOrigin oldState) =
+scanEvent :: (s -> a -> s) -> s -> Event a -> Event s
+scanEvent f nil (Event subscribers fromOrigin oldState) =
   Event
     subscribers
     (\s origin ->
        let (a, _) = fromOrigin oldState origin
-           s' = f s a
-       in (s', s'))
+           s' = fmap (f s) a
+       in (s', fromMaybe s s'))
     nil
-{-# INLINE foldEvent #-}
+{-# INLINE scanEvent #-}
+
+mapMaybeEvent :: (a -> Maybe b) -> Event a -> Event b
+mapMaybeEvent f (Event subscribers fromOrigin oldState) =
+  Event
+    subscribers
+    (\s origin ->
+       let (a, s') = fromOrigin s origin
+       in (a >>= f, s'))
+    oldState
+{-# INLINE mapMaybeEvent #-}
+
+filterEvent :: (a -> Bool) -> Event a -> Event a
+filterEvent p =
+  mapMaybeEvent
+    (\a ->
+       if p a
+         then Just a
+         else Nothing)
 
 bindEvent :: Event a -> (a -> IO ()) -> IO ()
 bindEvent Event {..} m = do
@@ -75,9 +94,10 @@ bindEvent Event {..} m = do
        (++ [ \v -> do
                s <- readIORef stateRef
                let (v', s') = eventFromOrigin s v
-               m v'
+               case v' of
+                 Nothing -> return ()
+                 Just v'' -> m v''
                writeIORef stateRef s'
-               pure ()
            ])
 
 --------------------------------------------------------------------------------
@@ -110,9 +130,9 @@ instance Applicative Dynamic where
 
 zipDynamics
   :: (a -> b -> c)
-  -> Snappy.Dynamic a
-  -> Snappy.Dynamic b
-  -> Snappy.Dynamic c
+  -> Dynamic a
+  -> Dynamic b
+  -> Dynamic c
 zipDynamics f d1 d2 =
   Dynamic
   { dynDefault = f (dynDefault d1) (dynDefault d2)
@@ -124,10 +144,10 @@ zipDynamics f d1 d2 =
         (Just d1event, Just d2event) -> Just (zipEvents f d1event d2event)
   }
 
-foldDynamic :: (s -> a -> s) -> s -> Event a -> Dynamic s
-foldDynamic f nil e =
+scanDynamic :: (s -> a -> s) -> s -> Event a -> Dynamic s
+scanDynamic f nil e =
   Dynamic {dynDefault = nil
-          ,dynEvent =  Just (foldEvent f nil e)}
+          ,dynEvent =  Just (scanEvent f nil e)}
 
 bindDynamic :: Dynamic a -> (a -> IO ()) -> IO ()
 bindDynamic (Dynamic _ event) m =
@@ -149,11 +169,23 @@ eventToDynamic d e = Dynamic {dynDefault = d, dynEvent = Just e}
 --------------------------------------------------------------------------------
 -- Drag event
 
-data DragEvent = DragStart | Dragging Drag | DragStop
+data DragEvent = DragStart Pos | Dragging Drag | DragStop
+
+data Pos = Pos
+  { posX :: Double
+  , posY :: Double
+  }
 
 data Drag = Drag
   { dragDX :: Double
   , dragDY :: Double
+  }
+
+data Rec = Rec
+  { recX :: Double
+  , recY :: Double
+  , recW :: Double
+  , recH :: Double
   }
 
 dragEvent :: Snap.HasDrag d => d -> IO (Event DragEvent)
@@ -163,10 +195,10 @@ dragEvent d = do
     d
     (\dx dy -> do
        subscribers <- readIORef subscribersRef
-       mapM_ (\subscriber -> subscriber (Dragging (Drag dx dy))) subscribers)
-    (\_ _ -> do
+       mapM_ (\subscriber -> do subscriber (Dragging (Drag dx dy))) subscribers)
+    (\x y -> do
        subscribers <- readIORef subscribersRef
-       mapM_ (\subscriber -> subscriber DragStart) subscribers)
+       mapM_ (\subscriber -> subscriber (DragStart (Pos x y))) subscribers)
     (\_ -> do
        subscribers <- readIORef subscribersRef
        mapM_ (\subscriber -> subscriber DragStop) subscribers)
@@ -174,7 +206,7 @@ dragEvent d = do
   pure
     (Event
      { eventSubscribers = subscribersRef
-     , eventFromOrigin = \s origin -> (origin, s)
+     , eventFromOrigin = \s origin -> (Just origin, s)
      , eventState = st
      })
 
@@ -188,7 +220,7 @@ draggable
 draggable c initial get =
   fmap
     snd
-    (foldDynamic
+    (scanDynamic
        (\(origin, new) event ->
           case event of
             Dragging pos -> (origin, origin + get pos)
@@ -217,7 +249,7 @@ clickEvent d = do
   pure
     (Event
      { eventSubscribers = subscribersRef
-     , eventFromOrigin = \s origin -> (origin, s)
+     , eventFromOrigin = \s origin -> (Just origin, s)
      , eventState = st
      })
 
@@ -255,6 +287,35 @@ circle snap xdynamic ydynamic rdynamic = do
        Snap.transform c t
        writeIORef yLast (y' - y))
   pure (Circle c drag xdynamic ydynamic)
+
+--------------------------------------------------------------------------------
+-- Rect object
+
+data Rect = Rect
+  { rectObject :: Snap.Rect
+  , rectDrag :: Event DragEvent
+  }
+
+rect
+  :: Snap.Snap
+  -> Dynamic Double
+  -> Dynamic Double
+  -> Dynamic Double
+  -> Dynamic Double
+  -> Dynamic String
+  -> IO Rect
+rect snap xdynamic ydynamic wdynamic hdynamic fdynamic = do
+  let x = dynamicDef xdynamic
+      y = dynamicDef ydynamic
+  c <- Snap.rect snap x y (dynamicDef wdynamic) (dynamicDef hdynamic) 0 0
+  Snap.setAttr c "fill" (dynamicDef fdynamic)
+  drag <- dragEvent c
+  bindDynamic xdynamic (\x' -> Snap.setAttr c "x" x')
+  bindDynamic ydynamic (\y' -> Snap.setAttr c "y" y')
+  bindDynamic wdynamic (\w' -> Snap.setAttr c "width" w')
+  bindDynamic hdynamic (\h' -> Snap.setAttr c "height" h')
+  bindDynamic fdynamic (\f' -> Snap.setAttr c "fill" f')
+  pure (Rect c drag)
 
 --------------------------------------------------------------------------------
 -- Text object

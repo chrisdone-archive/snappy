@@ -6,6 +6,7 @@ cabal-version:       >=1.10
 executable snappy
   hs-source-dirs:      app, src
   main-is:             Main.hs
+  other-modules: Snappy, Snap
   ghc-options:         -Wall -O2 -threaded
   build-depends:       base
                      , ghcjs-base

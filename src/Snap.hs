@@ -16,7 +16,7 @@ module Snap
 
 import           Control.Concurrent
 import           Control.Exception (evaluate)
-import           Data.Aeson (FromJSON(..), (.:), Value(..))
+import           Data.Aeson (FromJSON(..), ToJSON(..), (.:), Value(..))
 import           Data.Aeson.Types (parseMaybe)
 import           Data.IORef
 import qualified Data.Text as T
@@ -30,13 +30,17 @@ import           GHCJS.Foreign.Callback
 --------------------------------------------------------------------------------
 -- App
 
+#ifdef __GHCJS__
 foreign import javascript unsafe
     "document.getElementById($1)"
     js_getElementById :: JSVal -> IO JSVal
-
 getElementById :: String -> IO JSVal
 getElementById str = do v <- toJSVal str
                         js_getElementById v
+#else
+getElementById :: String -> IO JSVal
+getElementById = undefined
+#endif
 
 --------------------------------------------------------------------------------
 -- Snap object
