@@ -197,6 +197,31 @@ draggable c initial get =
        (circleDrag c))
 
 --------------------------------------------------------------------------------
+-- Click event
+
+data ClickEvent = ClickEvent
+  { clickX :: !Double
+  , clickY :: !Double
+  , clickModifier :: !Snap.Modifier
+  } deriving (Show)
+
+clickEvent :: Snap.HasClick d => d -> IO (Event ClickEvent)
+clickEvent d = do
+  subscribersRef <- newIORef mempty
+  Snap.singleClick
+    d
+    (\_event modifier x y -> do
+       subscribers <- readIORef subscribersRef
+       mapM_ (\subscriber -> subscriber (ClickEvent x y modifier)) subscribers)
+  st <- newIORef ()
+  pure
+    (Event
+     { eventSubscribers = subscribersRef
+     , eventFromOrigin = \s origin -> (origin, s)
+     , eventState = st
+     })
+
+--------------------------------------------------------------------------------
 -- Circle object
 
 data Circle = Circle
@@ -236,6 +261,7 @@ circle snap xdynamic ydynamic rdynamic = do
 
 data Text = Text
   { textObject :: Snap.Text
+  , textClicked :: Event ClickEvent
   }
 
 text :: Snap.Snap -> Dynamic Double -> Dynamic Double -> Dynamic String -> IO Text
@@ -261,4 +287,5 @@ text snap xdynamic ydynamic tdynamic = do
        Snap.transform c t
        writeIORef yLast (y' - y))
   bindDynamic tdynamic (\t' -> Snap.setAttr c "#text" t')
-  pure (Text c)
+  clickev <- clickEvent c
+  pure (Text c clickev)

@@ -16,7 +16,7 @@ module Snap
 
 import           Control.Concurrent
 import           Control.Exception (evaluate)
-import           Data.Aeson (FromJSON(..), ToJSON(..), (.:), Value(..))
+import           Data.Aeson (FromJSON(..), (.:), Value(..))
 import           Data.Aeson.Types (parseMaybe)
 import           Data.IORef
 import qualified Data.Text as T
@@ -106,6 +106,7 @@ rect (Snap snap _) rectX rectY width height rx ry =
 -- | A text object.
 newtype Text = Text JSVal
   deriving (ToJSVal)
+instance HasClick Text
 instance HasBBox Text
 instance HasAttr Text
 instance HasDrag Text
