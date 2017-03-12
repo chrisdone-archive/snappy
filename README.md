@@ -6,7 +6,7 @@ Source for demonstrations: https://github.com/chrisdone/snappy/tree/master/app
 
 ## Drag the ball around and see the text updated live
 
-[](http://i.imgur.com/BfZZfDW.gif)
+![](http://i.imgur.com/BfZZfDW.gif)
 
 ```haskell
   rec c <-
