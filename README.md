@@ -25,3 +25,28 @@ Source for demonstrations: https://github.com/chrisdone/snappy/tree/master/app
          (Snappy.circleX c)
          (Snappy.circleY c))
 ```
+
+## Click events and state
+
+![](http://i.imgur.com/NqtDLa1.gif)
+
+```haskell
+  rec button <-
+        Snappy.text
+          snap
+          (pure 10)
+          (pure 100)
+          (Snappy.eventToDynamic
+           "Click me!"
+           (fmap
+              snd
+              (Snappy.scanEvent
+                 (\(clicks,_) _ ->
+                    (clicks + 1
+                    ,case clicks of
+                       0 -> "You clicked me!"
+                       1 -> "Yep, that's how you click."
+                       _ -> "Alright. I got it."))
+                 (0 :: Int,"")
+                 (Snappy.textClicked button))))
+```
