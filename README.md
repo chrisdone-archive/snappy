@@ -1,8 +1,6 @@
 # snappy
 
-Go here for demonstrations: http://chrisdone.com/toys/
-
-Source for demonstrations: https://github.com/chrisdone/snappy/tree/master/app
+A reactive library for using SVG in the browser for Haskell
 
 ## Drag the ball around and see the text updated live
 
