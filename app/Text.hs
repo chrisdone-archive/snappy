@@ -1,4 +1,4 @@
-{-# LANGUAGE RecursiveDo, LambdaCase #-}
+{-# LANGUAGE RecursiveDo #-}
 
 module Main where
 
